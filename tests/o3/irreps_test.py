@@ -34,19 +34,21 @@ def test_properties() -> None:
 
     assert o3.Irrep(repr(irrep)) == irrep
 
-    l, p = o3.Irrep("5o")
+    l, p, t = o3.Irrep("5o")
     assert l == 5
     assert p == -1
+    assert t == 1
 
     iterator = o3.Irrep.iterator(5)
-    assert len(list(iterator)) == 12
+    assert len(list(iterator)) == 24
 
     iterator = o3.Irrep.iterator()
     for x in range(100):
         irrep = next(iterator)
-        assert irrep.l == x // 2
+        assert irrep.l == x // 4
         assert irrep.p in (-1, 1)
-        assert irrep.dim == 2 * (x // 2) + 1
+        assert irrep.t in (-1, 1)
+        assert irrep.dim == 2 * (x // 4) + 1
 
     irreps = o3.Irreps("4x1e + 6x2e + 12x2o")
     assert o3.Irreps(repr(irreps)) == irreps
@@ -63,6 +65,15 @@ def test_arithmetic() -> None:
     assert o3.Irreps("2x2e + 4x1o") * 2 == o3.Irreps("2x2e + 4x1o + 2x2e + 4x1o")
 
     assert o3.Irreps("1o + 4o") + o3.Irreps("1o + 7e") == o3.Irreps("1o + 4o + 1o + 7e")
+
+
+def test_time_reversal() -> None:
+    assert o3.Irrep("1eo") == o3.Irrep(1, 1, -1)
+    assert o3.Irrep("1o") == o3.Irrep("1oe")
+    assert repr(o3.Irrep("1eo")) == "1eo"
+
+    products = list(o3.Irrep("1eo") * o3.Irrep("1oe"))
+    assert products == [o3.Irrep("0oo"), o3.Irrep("1oo"), o3.Irrep("2oo")]
 
 
 def test_empty_irreps() -> None:

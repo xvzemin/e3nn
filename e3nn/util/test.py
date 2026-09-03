@@ -113,7 +113,12 @@ def random_irreps(
     for _ in range(n):
         this_irreps = []
         for _ in range(random.randint(len_min, len_max)):
-            this_irreps.append((random.randint(mul_min, mul_max), (random.randint(0, lmax), random.choice((1, -1)))))
+            this_irreps.append(
+                (
+                    random.randint(mul_min, mul_max),
+                    (random.randint(0, lmax), random.choice((1, -1)), random.choice((1, -1))),
+                )
+            )
         if not allow_empty and all(m == 0 for m, _ in this_irreps):
             this_irreps[-1] = (random.randint(1, mul_max), this_irreps[-1][1])
         this_irreps = o3.Irreps(this_irreps)
@@ -127,7 +132,7 @@ def random_irreps(
         elif outtype == "str":
             out.append(repr(this_irreps))
         elif outtype == "list":
-            out.append([(mul_ir.mul, (mul_ir.ir.l, mul_ir.ir.p)) for mul_ir in this_irreps])
+            out.append([(mul_ir.mul, (mul_ir.ir.l, mul_ir.ir.p, mul_ir.ir.t)) for mul_ir in this_irreps])
 
     if n == 1:
         return out[0]
@@ -148,8 +153,9 @@ def format_equivariance_error(errors: dict) -> str:
         A string.
     """
     return "\n".join(
-        "(parity_k={:d}, did_translate={}) -> max error={:.3e} in argument {}".format(
-            int(k[0]), bool(k[1]), float(v.max()), int(v.argmax())
+        "(parity_k={:d}, did_translate={}, time_reversal_k={:d}, only_rot_spin={}) -> "
+        "max error={:.3e} in argument {}".format(
+            int(k[0]), bool(k[1]), int(k[2]), bool(k[3]), float(v.max()), int(v.argmax())
         )
         for k, v in errors.items()
     )
@@ -162,7 +168,7 @@ def assert_equivariant(func, args_in=None, irreps_in=None, irreps_out=None, tole
     ----------
         args_in : list or None
             the original input arguments for the function. If ``None`` and the function has ``irreps_in`` consisting only of
-            ``o3.Irreps`` and ``'cartesian'``, random test inputs will be generated.
+            ``o3.Irreps``, ``'cartesian_points'``, and ``'spin'``, random test inputs will be generated.
         irreps_in : object
             see ``equivariance_error``
         irreps_out : object
@@ -175,7 +181,8 @@ def assert_equivariant(func, args_in=None, irreps_in=None, irreps_out=None, tole
 
     Returns
     -------
-    The same as ``equivariance_error``: a dictionary mapping tuples ``(parity_k, did_translate)`` to errors
+    The same as ``equivariance_error``: a dictionary mapping tuples
+    ``(parity_k, did_translate, time_reversal_k, only_rot_spin)`` to errors.
     """
     # Prevent pytest from showing this function in the traceback
     __tracebackhide__ = True
@@ -212,7 +219,9 @@ def equivariance_error(
     irreps_out=None,
     ntrials: int = 1,
     do_parity: bool = True,
+    do_time_reversal: bool = False,
     do_translation: bool = True,
+    do_only_rot_spin: bool = False,
     transform_dtype=torch.float64,
 ):
     r"""Get the maximum equivariance error for ``func`` over ``ntrials``
@@ -227,21 +236,25 @@ def equivariance_error(
         the original inputs to pass to ``func``.
     irreps_in : list of `e3nn.o3.Irreps` or `e3nn.o3.Irreps`
         the input irreps for each of the arguments in ``args_in``. If left as the default of ``None``, ``get_io_irreps`` will
-        be used to try to infer them. If a sequence is provided, valid elements are also the string ``'cartesian'``, which
-        denotes that the corresponding input should be dealt with as cartesian points in 3D, and ``None``, which indicates
-        that the argument should not be transformed.
+        be used to try to infer them. If a sequence is provided, valid elements are also ``'cartesian_points'`` for points
+        in 3D, ``'spin'`` for axial vectors that are odd under time reversal, and ``None`` for arguments that should not be
+        transformed.
     irreps_out : list of `e3nn.o3.Irreps` or `e3nn.o3.Irreps`
         the out irreps for each of the return values of ``func``. Accepts similar values to ``irreps_in``.
     ntrials : int
         run this many trials with random transforms
     do_parity : bool
         whether to test parity
+    do_time_reversal : bool
+        whether to test time reversal
     do_translation : bool
-        whether to test translation for ``'cartesian'`` inputs
+        whether to test translation for ``'cartesian_points'`` inputs
+    do_only_rot_spin : bool
+        whether to additionally test independent global spin rotations
 
     Returns
     -------
-    dictionary mapping tuples ``(parity_k, did_translate)`` to an array of errors,
+    dictionary mapping tuples ``(parity_k, did_translate, time_reversal_k, only_rot_spin)`` to an array of errors,
     each entry the biggest over all trials for that output, in order.
     """
     irreps_in, irreps_out = _get_io_irreps(func, irreps_in=irreps_in, irreps_out=irreps_out)
@@ -251,6 +264,16 @@ def equivariance_error(
     else:
         parity_ks = [0]
 
+    if do_time_reversal:
+        time_reversal_ks = [0, 1]
+    else:
+        time_reversal_ks = [0]
+
+    if do_only_rot_spin:
+        only_rot_spin_values = [False, True]
+    else:
+        only_rot_spin_values = [False]
+
     if "cartesian_points" not in irreps_in:
         # There's nothing to translate
         do_translation = False
@@ -259,7 +282,7 @@ def equivariance_error(
     else:
         do_translation = [False]
 
-    tests = list(itertools.product(parity_ks, do_translation))
+    tests = list(itertools.product(parity_ks, do_translation, time_reversal_ks, only_rot_spin_values))
 
     neg_inf = -float("Inf")
     device = next(t.device for t in args_in if isinstance(t, torch.Tensor))
@@ -267,16 +290,22 @@ def equivariance_error(
 
     for trial in range(ntrials):
         for this_test in tests:
-            parity_k, this_do_translate = this_test
+            parity_k, this_do_translate, time_reversal_k, only_rot_spin = this_test
             # Build a rotation matrix for point data
             rot_mat = o3.rand_matrix(dtype=transform_dtype)
-            # add parity
-            rot_mat *= (-1) ** parity_k
             # build translation
             translation = 10 * torch.randn(1, 3, dtype=rot_mat.dtype) if this_do_translate else 0.0
 
             # Evaluate the function on rotated arguments:
-            rot_args = _transform(args_in, irreps_in, rot_mat, translation)
+            rot_args = _transform(
+                args_in,
+                irreps_in,
+                rot_mat,
+                translation,
+                parity_k=parity_k,
+                time_reversal_k=time_reversal_k,
+                only_rot_spin=only_rot_spin,
+            )
             x1 = func(*rot_args)
             if isinstance(x1, torch.Tensor):
                 x1 = [x1]
@@ -304,7 +333,16 @@ def equivariance_error(
 
             # apply the group action to x2
             # get this in the transform dtype
-            x2 = _transform(x2, irreps_out, rot_mat, translation, output_transform_dtype=True)
+            x2 = _transform(
+                x2,
+                irreps_out,
+                rot_mat,
+                translation,
+                output_transform_dtype=True,
+                parity_k=parity_k,
+                time_reversal_k=time_reversal_k,
+                only_rot_spin=only_rot_spin,
+            )
 
             # compute errors in the transform dtype,
             # then convert back to default later
@@ -507,7 +545,7 @@ def assert_normalized(
 
     # check them
     for expected_square, irreps in zip(expected_squares, irreps_out):
-        if irreps == "cartesian_points" or irreps is None:
+        if irreps in ("cartesian_points", "spin") or irreps is None:
             continue
         if normalization == "component":
             targets = [1.0] * len(irreps)

@@ -20,6 +20,7 @@ User Guide
 
     periodic_boundary_conditions
     transformer
+    time_reversal
     equivar_testing
     jit
     change_of_basis

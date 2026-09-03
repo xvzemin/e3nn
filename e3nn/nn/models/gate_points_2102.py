@@ -272,14 +272,17 @@ class Network(torch.nn.Module):
             irreps_gated = o3.Irreps(
                 [(mul, ir) for mul, ir in self.irreps_hidden if ir.l > 0 and tp_path_exists(irreps, self.irreps_edge_attr, ir)]
             )
-            ir = "0e" if tp_path_exists(irreps, self.irreps_edge_attr, "0e") else "0o"
+            ir = next(
+                (ir for ir in ("0ee", "0oe", "0eo", "0oo") if tp_path_exists(irreps, self.irreps_edge_attr, ir)),
+                "0ee",
+            )
             irreps_gates = o3.Irreps([(mul, ir) for mul, _ in irreps_gated])
 
             gate = Gate(
                 irreps_scalars,
-                [act[ir.p] for _, ir in irreps_scalars],  # scalar
+                [act[-1 if ir.p == -1 or ir.t == -1 else 1] for _, ir in irreps_scalars],  # scalar
                 irreps_gates,
-                [act_gates[ir.p] for _, ir in irreps_gates],  # gates (scalars)
+                [act_gates[-1 if ir.p == -1 or ir.t == -1 else 1] for _, ir in irreps_gates],  # gates (scalars)
                 irreps_gated,  # gated tensors
             )
             conv = Convolution(

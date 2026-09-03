@@ -4,12 +4,13 @@ Euclidean neural networks
 What is ``e3nn``?
 -----------------
 
-``e3nn`` is a python library based on pytorch_ to create equivariant neural networks for the group :math:`O(3)`.
+``e3nn`` is a python library based on pytorch_ to create equivariant neural networks for the group :math:`O(3) \times \mathbb{Z}_2^T`.
 
 Where to start?
 ---------------
 
 - Guide to the `e3nn.o3.Irreps`: :ref:`irreps guide`
+- Guide to :ref:`time reversal symmetry`
 - Guide to implement a :ref:`conv guide`
 - The simplest example to start with is :ref:`tetris_poly`.
 - Guide to implement a :ref:`transformer guide`
@@ -25,8 +26,9 @@ Demonstration
 -------------
 
 All the functions to manipulate rotations (rotation matrices, Euler angles, quaternions, convertions, ...) can be found here :ref:`Rotation functions`.
-The irreducible representations of :math:`O(3)` (more info at :ref:`Irreducible representations`) are represented by the class `e3nn.o3.Irrep`.
+The irreducible representations of :math:`O(3) \times \mathbb{Z}_2^T` (more info at :ref:`Irreducible representations`) are represented by the class `e3nn.o3.Irrep`.
 The direct sum of multiple irrep is described by an object `e3nn.o3.Irreps`.
+The one-letter suffix used below omits the time-reversal parity, which defaults to even; see :ref:`time reversal symmetry` for the explicit notation.
 
 If two tensors :math:`x` and :math:`y` transforms as :math:`D_x = 2 \times 1_o` (two vectors) and :math:`D_y = 0_e + 1_e` (a scalar and a pseudovector) respectively, where the indices :math:`e` and :math:`o` stand for even and odd -- the representation of parity,
 
@@ -96,4 +98,3 @@ As a sanity check, we can verify that the representation of the tensor prodcut i
 
 
 .. _pytorch: https://pytorch.org/
-

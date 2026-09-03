@@ -99,11 +99,15 @@ class MessagePassing(torch.nn.Module):
                 ]
             )
             if irreps_gated.dim > 0:
-                if tp_path_exists(irreps_node, self.irreps_edge_attr, "0e"):
-                    ir = "0e"
-                elif tp_path_exists(irreps_node, self.irreps_edge_attr, "0o"):
-                    ir = "0o"
-                else:
+                ir = next(
+                    (
+                        ir
+                        for ir in ("0ee", "0oe", "0eo", "0oo")
+                        if tp_path_exists(irreps_node, self.irreps_edge_attr, ir)
+                    ),
+                    None,
+                )
+                if ir is None:
                     raise ValueError(
                         f"irreps_node={irreps_node} times irreps_edge_attr={self.irreps_edge_attr} is unable to produce gates "
                         f"needed for irreps_gated={irreps_gated}"
@@ -114,9 +118,9 @@ class MessagePassing(torch.nn.Module):
 
             gate = Gate(
                 irreps_scalars,
-                [act[ir.p] for _, ir in irreps_scalars],  # scalar
+                [act[-1 if ir.p == -1 or ir.t == -1 else 1] for _, ir in irreps_scalars],  # scalar
                 irreps_gates,
-                [act_gates[ir.p] for _, ir in irreps_gates],  # gates (scalars)
+                [act_gates[-1 if ir.p == -1 or ir.t == -1 else 1] for _, ir in irreps_gates],  # gates (scalars)
                 irreps_gated,  # gated tensors
             )
             conv = Convolution(

@@ -18,7 +18,8 @@ class S2Activation(torch.nn.Module):
     Parameters
     ----------
     irreps : `o3.Irreps`
-        input representation of the form ``[(1, (l, p_val * (p_arg)^l)) for l in [0, ..., lmax]]``
+        input representation of the form
+        ``[(1, (l, p_val * p_arg**l, t_val * t_arg**l)) for l in [0, ..., lmax]]``
 
     act : function
         activation function :math:`\phi`
@@ -46,36 +47,44 @@ class S2Activation(torch.nn.Module):
         super().__init__()
 
         irreps = o3.Irreps(irreps).simplify()
-        _, (_, p_val) = irreps[0]
-        _, (lmax, _) = irreps[-1]
+        _, (_, p_val, t_val) = irreps[0]
+        _, (lmax, _, _) = irreps[-1]
         assert all(mul == 1 for mul, _ in irreps)
         assert irreps.ls == list(range(lmax + 1))
-        if all(p == p_val for _, (l, p) in irreps):
+        if all(p == p_val for _, (l, p, _) in irreps):
             p_arg = 1
-        elif all(p == p_val * (-1) ** l for _, (l, p) in irreps):
+        elif all(p == p_val * (-1) ** l for _, (l, p, _) in irreps):
             p_arg = -1
         else:
             assert False, "the parity of the input is not well defined"
+        if all(t == t_val for _, (l, _, t) in irreps):
+            t_arg = 1
+        elif all(t == t_val * (-1) ** l for _, (l, _, t) in irreps):
+            t_arg = -1
+        else:
+            assert False, "the time-reversal parity of the input is not well defined"
         self.irreps_in = irreps
         # the input transforms as : A_l ---> p_val * (p_arg)^l * A_l
         # the sphere signal transforms as : f(r) ---> p_val * f(p_arg * r)
         if lmax_out is None:
             lmax_out = lmax
 
-        if p_val in (0, +1):
-            self.irreps_out = o3.Irreps([(1, (l, p_val * p_arg**l)) for l in range(lmax_out + 1)])
-        if p_val == -1:
+        act_parity = 1
+        if p_val == -1 or t_val == -1:
             x = torch.linspace(0, 10, 256)
             a1, a2 = act(x), act(-x)
             if (a1 - a2).abs().max() < a1.abs().max() * 1e-10:
-                # p_act = 1
-                self.irreps_out = o3.Irreps([(1, (l, p_arg**l)) for l in range(lmax_out + 1)])
+                act_parity = 1
             elif (a1 + a2).abs().max() < a1.abs().max() * 1e-10:
-                # p_act = -1
-                self.irreps_out = o3.Irreps([(1, (l, -(p_arg**l))) for l in range(lmax_out + 1)])
+                act_parity = -1
             else:
-                # p_act = 0
-                raise ValueError("warning! the parity is violated")
+                raise ValueError("the activation violates parity or time-reversal symmetry")
+
+        p_val_out = act_parity if p_val == -1 else p_val
+        t_val_out = act_parity if t_val == -1 else t_val
+        self.irreps_out = o3.Irreps(
+            [(1, (l, p_val_out * p_arg**l, t_val_out * t_arg**l)) for l in range(lmax_out + 1)]
+        )
 
         self.to_s2 = o3.ToS2Grid(lmax, res, normalization=normalization)
         self.from_s2 = o3.FromS2Grid(res, lmax_out, normalization=normalization, lmax_in=lmax)

@@ -17,7 +17,7 @@ In `e3nn.util.test`, the library provides some tools for confirming that functio
         irreps_out=[tp.irreps_out]
     )
 
-The keys in the output indicate the type of random transformation (``(parity, did_translation)``) and the values are the maximum componentwise error.
+The keys in the output indicate the type of random transformation (``(parity, did_translation, time_reversal, only_rot_spin)``) and the values are the maximum componentwise error.
 For convenience, the wrapper function `assert_equivariant` is provided:
 
 .. jupyter-execute::
@@ -28,9 +28,10 @@ For convenience, the wrapper function `assert_equivariant` is provided:
 
 For typical e3nn operations `assert_equivariant` can optionally infer the input and output `e3nn.o3.Irreps`, generate random inputs when no inputs are provided, and check the error against a threshold appropriate to the current  ``torch.get_default_dtype()``.
 
-In addition to `e3nn.o3.Irreps`-like objects, ``irreps_in`` can also contain two special values:
+In addition to `e3nn.o3.Irreps`-like objects, ``irreps_in`` can also contain three special values:
 
  * ``'cartesian_points'``: ``(N, 3)`` tensors containing XYZ points in real space that are equivariant under rotations *and* translations
+ * ``'spin'``: ``(N, 3)`` tensors containing axial vectors that are odd under time reversal
  * ``None``: any input or output that is invariant and should be left alone
 
 These can be used to test models that operate on full graphs that include position information:
@@ -82,6 +83,8 @@ To test equivariance on a specific graph, ``args_in`` can be used:
         args_in=[my_pos, my_x],
         irreps_out=[f.irreps_out],
     )
+
+Time reversal is tested by setting ``do_time_reversal=True``. Independent global spin rotations can additionally be tested with ``do_only_rot_spin=True``.
 
 Logging
 -------

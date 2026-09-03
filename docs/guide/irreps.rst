@@ -6,6 +6,7 @@ Irreducible representations
 This page is a beginner introduction to the main object of ``e3nn`` library: `e3nn.o3.Irreps`.
 All the core component of ``e3nn`` can be found in ``e3nn.o3``.
 ``o3`` stands for the group of 3d orthogonal matrices, which is equivalently the group of rotation and inversion.
+The additional time-reversal parity is described in :ref:`time reversal symmetry`.
 
 .. jupyter-execute::
 
@@ -17,15 +18,15 @@ The mathematical description of irreps can be found in the API :ref:`Irreducible
 
 .. jupyter-execute::
 
-    irreps = Irreps("1o")
+    irreps = Irreps("1oe")
     irreps
 
 ``irreps`` does not contain any data. Under the hood it is simply a tuple of made of other tuples and ints.
 
 .. jupyter-execute::
 
-    # Tuple[Tuple[int, Tuple[int, int]]]
-    # ((multiplicity, (l, p)), ...)
+    # Tuple[Tuple[int, Tuple[int, int, int]]]
+    # ((multiplicity, (l, p, t)), ...)
 
     print(len(irreps))
     mul_ir = irreps[0]  # a tuple
@@ -38,11 +39,12 @@ The mathematical description of irreps can be found in the API :ref:`Irreducible
     print(mul)
 
     print(ir)
-    # print(len(ir))  ir is a tuple of 2 ints but __len__ has been disabled since it is always 2
+    # print(len(ir))  ir is a tuple of 3 ints but __len__ has been disabled since it is always 3
     l = ir[0]
     p = ir[1]
+    time_reversal = ir[2]
 
-    print(l, p)
+    print(l, p, time_reversal)
 
 Our ``irreps`` means "transforms like a vector".
 ``irreps`` is able to provide the matrix to transform the data under a rotation
@@ -64,7 +66,7 @@ In this example
 
 .. jupyter-execute::
 
-    irreps = Irreps("7x0e + 3x0o + 5x1o + 5x2o")
+    irreps = Irreps("7x0ee + 3x0oe + 5x1oe + 5x2oe")
 
 the ``irreps`` tell us how 7 scalars, 3 pseudoscalars, 5 vectors and 5 odd representation of ``l=2`` transforms.
 They all transforms independently, this can be seen by visualizing the matrix
@@ -78,4 +80,3 @@ They all transforms independently, this can be seen by visualizing the matrix
 
     import matplotlib.pyplot as plt
     plt.imshow(D, cmap='bwr', vmin=-1, vmax=1);
-

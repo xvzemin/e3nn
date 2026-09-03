@@ -8,6 +8,9 @@ import torch
 from e3nn.o3._irreps import Irreps
 
 
+_SPECIAL_IRREPS = ("cartesian_points", "spin")
+
+
 def _is_irreps(obj):
     """Check if obj is an Irreps instance, even across different class definitions.
 
@@ -17,11 +20,23 @@ def _is_irreps(obj):
     return hasattr(type(obj), '_e3nn_irreps_marker')
 
 
-def _transform(dat, irreps_dat, rot_mat, translation: float = 0.0, output_transform_dtype: bool = False):
+def _transform(
+    dat,
+    irreps_dat,
+    rot_mat,
+    translation: float = 0.0,
+    output_transform_dtype: bool = False,
+    parity_k: int = 0,
+    time_reversal_k: int = 0,
+    only_rot_spin: bool = False,
+):
     """Transform ``dat`` by ``rot_mat`` and ``translation`` according to ``irreps_dat``."""
     out = []
     transform_dtype = rot_mat.dtype
     translation = torch.as_tensor(translation, dtype=transform_dtype)
+    assert parity_k in (0, 1)
+    assert time_reversal_k in (0, 1)
+    reversal = parity_k or time_reversal_k
     for irreps, a in zip(irreps_dat, dat):
         if output_transform_dtype:
             out_dtype = transform_dtype
@@ -31,16 +46,32 @@ def _transform(dat, irreps_dat, rot_mat, translation: float = 0.0, output_transf
             out.append(a.clone())
         elif irreps == "cartesian_points":
             translation = torch.as_tensor(translation, device=a.device)
-            out.append(((a.to(transform_dtype) @ rot_mat.T.to(a.device)) + translation).to(out_dtype))
+            if only_rot_spin:
+                out.append((a.to(transform_dtype) + translation).to(out_dtype))
+            else:
+                point_rot = rot_mat * (-1) ** parity_k
+                out.append(((a.to(transform_dtype) @ point_rot.T.to(a.device)) + translation).to(out_dtype))
+        elif irreps == "spin":
+            spin_rot = rot_mat * (-1) ** time_reversal_k
+            out.append((a.to(transform_dtype) @ spin_rot.T.to(a.device)).to(out_dtype))
         else:
             # For o3.Irreps
-            out.append((a.to(transform_dtype) @ irreps.D_from_matrix(rot_mat).T.to(a.device)).to(out_dtype))
+            if only_rot_spin:
+                out.append(a.clone())
+            else:
+                representation_rot = rot_mat * (-1) ** reversal
+                D = irreps.D_from_matrix(
+                    representation_rot,
+                    parity=bool(parity_k),
+                    time_reversal=bool(time_reversal_k),
+                )
+                out.append((a.to(transform_dtype) @ D.T.to(a.device)).to(out_dtype))
     return out
 
 
 def _get_io_irreps(func, irreps_in=None, irreps_out=None):
     """Preprocess or, if not given, try to infer the I/O irreps for ``func``."""
-    SPECIAL_VALS = ["cartesian_points", None]
+    special_irreps = _SPECIAL_IRREPS + (None,)
 
     if (irreps_in is None or irreps_out is None) and isinstance(func, torch.jit.ScriptModule):
         warnings.warn(
@@ -61,10 +92,10 @@ def _get_io_irreps(func, irreps_in=None, irreps_out=None):
         else:
             raise ValueError("Cannot infer irreps_out for %r; provide them explicitly" % func)
 
-    if _is_irreps(irreps_in) or irreps_in in SPECIAL_VALS:
+    if _is_irreps(irreps_in) or irreps_in in special_irreps:
         irreps_in = [irreps_in]
     elif isinstance(irreps_in, list):
-        irreps_in = [i if i in SPECIAL_VALS else Irreps(i) for i in irreps_in]
+        irreps_in = [i if i in special_irreps else Irreps(i) for i in irreps_in]
     else:
         if isinstance(irreps_in, tuple) and not _is_irreps(irreps_in):
             warnings.warn(
@@ -74,10 +105,10 @@ def _get_io_irreps(func, irreps_in=None, irreps_out=None):
             )
         irreps_in = [Irreps(irreps_in)]
 
-    if _is_irreps(irreps_out) or irreps_out in SPECIAL_VALS:
+    if _is_irreps(irreps_out) or irreps_out in special_irreps:
         irreps_out = [irreps_out]
     elif isinstance(irreps_out, list):
-        irreps_out = [i if i in SPECIAL_VALS else Irreps(i) for i in irreps_out]
+        irreps_out = [i if i in special_irreps else Irreps(i) for i in irreps_out]
     else:
         if isinstance(irreps_out, tuple) and not _is_irreps(irreps_out):
             warnings.warn(
@@ -99,16 +130,17 @@ def _get_args_in(func, args_in=None, irreps_in=None, irreps_out=None):
 
 
 def _rand_args(irreps_in, batch_size: Optional[int] = None):
-    if not all((_is_irreps(i) or i == "cartesian_points") for i in irreps_in):
+    if not all((_is_irreps(i) or i in _SPECIAL_IRREPS) for i in irreps_in):
         raise ValueError(
-            "Random arguments cannot be generated when argument types besides Irreps and `'cartesian_points'` are specified; "
+            "Random arguments cannot be generated when argument types besides Irreps, `'cartesian_points'`, and `'spin'` "
+            "are specified; "
             "provide explicit ``args_in``"
         )
     if batch_size is None:
         # Generate random args with random size batch dim between 1 and 4:
         batch_size = random.randint(1, 4)
     args_in = [
-        torch.randn(batch_size, 3) if (irreps == "cartesian_points") else irreps.randn(batch_size, -1) for irreps in irreps_in
+        torch.randn(batch_size, 3) if (irreps in _SPECIAL_IRREPS) else irreps.randn(batch_size, -1) for irreps in irreps_in
     ]
     return args_in
 

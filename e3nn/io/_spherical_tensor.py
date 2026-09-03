@@ -40,6 +40,13 @@ class SphericalTensor(o3.Irreps):
 
         &= \sum_{l=0}^{l_\mathrm{max}} p_v p_a^l A^l \cdot Y^l(x)
 
+    Time reversal acts in the same way through :math:`t_v` and :math:`t_a`
+
+    .. math::
+        (T f)(x) &= t_v f(t_a x)
+
+        &= \sum_{l=0}^{l_\mathrm{max}} t_v t_a^l A^l \cdot Y^l(x)
+
 
     Parameters
     ----------
@@ -52,15 +59,21 @@ class SphericalTensor(o3.Irreps):
     p_arg : {+1, -1}
         :math:`p_a`
 
+    t_val : {+1, -1}
+        :math:`t_v`
+
+    t_arg : {+1, -1}
+        :math:`t_a`
+
 
     Examples
     --------
 
     >>> SphericalTensor(3, 1, 1)
-    1x0e+1x1e+1x2e+1x3e
+    1x0ee+1x1ee+1x2ee+1x3ee
 
     >>> SphericalTensor(3, 1, -1)
-    1x0e+1x1o+1x2e+1x3o
+    1x0ee+1x1oe+1x2ee+1x3oe
     """
 
     # pylint: disable=abstract-method
@@ -71,8 +84,13 @@ class SphericalTensor(o3.Irreps):
         lmax,
         p_val,
         p_arg,
+        t_val=1,
+        t_arg=1,
     ):
-        return super().__new__(cls, [(1, (l, p_val * p_arg**l)) for l in range(lmax + 1)])
+        return super().__new__(
+            cls,
+            [(1, (l, p_val * p_arg**l, t_val * t_arg**l)) for l in range(lmax + 1)],
+        )
 
     def with_peaks_at(self, vectors, values=None):
         r"""Create a spherical tensor with peaks
@@ -130,7 +148,7 @@ class SphericalTensor(o3.Irreps):
         vectors = vectors[values != 0]  # [batch, 3]
         values = values[values != 0]
 
-        coeff = o3.spherical_harmonics(self, vectors, normalize=True)  # [batch, l * m]
+        coeff = o3.spherical_harmonics(list(range(self.lmax + 1)), vectors, normalize=True)  # [batch, l * m]
         A = torch.einsum("ai,bi->ab", coeff, coeff)
         # Y(v_a) . Y(v_b) solution_b = radii_a
         solution = torch.linalg.lstsq(A, values).solution.reshape(-1)  # [b]
@@ -187,7 +205,7 @@ class SphericalTensor(o3.Irreps):
         if positions.numel() == 0:
             return torch.zeros(values.shape[:-1] + (self.dim,))
 
-        y = o3.spherical_harmonics(self, positions, True)  # [..., N, dim]
+        y = o3.spherical_harmonics(list(range(self.lmax + 1)), positions, True)  # [..., N, dim]
         v = values[..., None]
 
         return 4 * pi / (self.lmax + 1) ** 2 * (y * v).sum(-2)
@@ -319,7 +337,7 @@ class SphericalTensor(o3.Irreps):
         >>> s.signal_xyz(s.randn(2, 1, 3, -1), torch.randn(2, 4, 3)).shape
         torch.Size([2, 1, 3, 2, 4])
         """
-        sh = o3.spherical_harmonics(self, r, normalize=True)
+        sh = o3.spherical_harmonics(list(range(self.lmax + 1)), r, normalize=True)
         dim = (self.lmax + 1) ** 2
         output = torch.einsum("bi,ai->ab", sh.reshape(-1, dim), signal.reshape(-1, dim))
         return output.reshape(signal.shape[:-1] + r.shape[:-1])

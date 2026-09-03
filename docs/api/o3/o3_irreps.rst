@@ -12,7 +12,7 @@ A group representation :math:`(D,V)` describe the action of a group :math:`G` on
 The irreducible representations, in short *irreps* (definition of irreps_) are the "smallest" representations.
 
 - Any representation can be decomposed via a change of basis into a direct sum of irreps
-- Any physical quantity, under the action of :math:`O(3)`, transforms with a representation of :math:`O(3)`
+- Any physical quantity, under the action of :math:`O(3) \times \mathbb{Z}_2^T`, transforms with a representation of :math:`O(3) \times \mathbb{Z}_2^T`
 
 The irreps of :math:`SO(3)` are called the wigner_ matrices :math:`D^L`.
 The irreps of the group of inversion (:math:`\{e, I\}`) are the trivial_ representation :math:`\sigma_+` and the sign representation :math:`\sigma_-`
@@ -21,22 +21,24 @@ The irreps of the group of inversion (:math:`\{e, I\}`) are the trivial_ represe
 
     \sigma_p(g) = \left \{ \begin{array}{l} 1 \text{ if } g = e \\ p \text{ if } g = I \end{array} \right..
 
+The irreps of time reversal (:math:`\{e, T\}`) are likewise labeled by :math:`t = \pm 1`.
+
 The group :math:`O(3)` is the direct_ product of :math:`SO(3)` and inversion
 
 .. math::
 
     g = r i, \quad r \in SO(3), i \in \text{inversion}.
 
-The irreps of :math:`O(3)` are the product of the irreps of :math:`SO(3)` and inversion.
-An instance of the class `e3nn.o3.Irreps` represent a direct sum of irreps of :math:`O(3)`:
+The irreps of :math:`O(3) \times \mathbb{Z}_2^T` are the product of the irreps of :math:`SO(3)`, inversion, and time reversal.
+An instance of the class `e3nn.o3.Irreps` represent a direct sum of irreps of :math:`O(3) \times \mathbb{Z}_2^T`:
 
 .. math::
 
-    g = r i \mapsto \bigoplus_{j=1}^n m_j \times \sigma_{p_j}(i) D^{L_j}(r)
+    (r i, \tau) \mapsto \bigoplus_{j=1}^n m_j \times \sigma_{p_j}(i) \sigma_{t_j}(\tau) D^{L_j}(r)
 
-where :math:`(m_j \in \mathbb{N}, p_j = \pm 1, L_j = 0,1,2,3,\dots)_{j=1}^n` defines the `e3nn.o3.Irreps`.
+where :math:`(m_j \in \mathbb{N}, p_j = \pm 1, t_j = \pm 1, L_j = 0,1,2,3,\dots)_{j=1}^n` defines the `e3nn.o3.Irreps`.
 
-Irreps of :math:`O(3)` are often confused with the spherical harmonics, the relation between the irreps and the spherical harmonics is explained at :ref:`Spherical Harmonics`.
+Irreps are often confused with the spherical harmonics, the relation between the irreps and the spherical harmonics is explained at :ref:`Spherical Harmonics`.
 
 .. _direct: https://en.wikipedia.org/wiki/Direct_product_of_groups
 .. _trivial: https://en.wikipedia.org/wiki/Trivial_representation

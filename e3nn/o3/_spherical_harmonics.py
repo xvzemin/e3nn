@@ -31,6 +31,8 @@ class SphericalHarmonics(torch.nn.Module):
         normalize: bool,
         normalization: str = "integral",
         irreps_in: Any = None,
+        parity: bool = True,
+        time_reversal: bool = False,
     ) -> None:
         super().__init__()
         self.normalize = normalize
@@ -40,29 +42,36 @@ class SphericalHarmonics(torch.nn.Module):
         if isinstance(irreps_out, str):
             irreps_out = Irreps(irreps_out)
         if isinstance(irreps_out, Irreps) and irreps_in is None:
-            for mul, (l, p) in irreps_out:
-                if l % 2 == 1 and p == 1:
-                    irreps_in = Irreps("1e")
+            for _, (l, p, t) in irreps_out:
+                if l % 2 == 1:
+                    irreps_in = Irreps([(1, (1, p, t))])
+                    break
         if irreps_in is None:
-            irreps_in = Irreps("1o")
+            irreps_in = Irreps([(1, (1, -1 if parity else 1, -1 if time_reversal else 1))])
 
         irreps_in = Irreps(irreps_in)
-        if irreps_in not in (Irreps("1x1o"), Irreps("1x1e")):
+        if len(irreps_in) != 1 or irreps_in[0].mul != 1 or irreps_in[0].ir.l != 1:
             raise ValueError(
-                f"irreps_in for SphericalHarmonics must be either a vector (`1x1o`) or a pseudovector (`1x1e`), "
-                f"not `{irreps_in}`"
+                "irreps_in for SphericalHarmonics must contain exactly one l=1 irrep, " f"not `{irreps_in}`"
             )
         self.irreps_in = irreps_in
         input_p = irreps_in[0].ir.p  # pylint: disable=no-member
+        input_t = irreps_in[0].ir.t
 
         if isinstance(irreps_out, Irreps):
             ls = []
-            for mul, (l, p) in irreps_out:
+            for mul, (l, p, t) in irreps_out:
                 if p != input_p**l:
                     raise ValueError(
                         f"irreps_out `{irreps_out}` passed to SphericalHarmonics asked for an output of l = {l} with parity "
                         f"p = {p}, which is inconsistent with the input parity {input_p} — the output parity should have been "
                         f"p = {input_p**l}"
+                    )
+                if t != input_t**l:
+                    raise ValueError(
+                        f"irreps_out `{irreps_out}` passed to SphericalHarmonics asked for an output of l = {l} with "
+                        f"time-reversal parity t = {t}, which is inconsistent with the input time-reversal parity "
+                        f"{input_t} — the output time-reversal parity should have been t = {input_t**l}"
                     )
                 ls.extend([l] * mul)
         elif isinstance(irreps_out, int):
@@ -70,7 +79,7 @@ class SphericalHarmonics(torch.nn.Module):
         else:
             ls = list(irreps_out)
 
-        irreps_out = Irreps([(1, (l, input_p**l)) for l in ls]).simplify()
+        irreps_out = Irreps([(1, (l, input_p**l, input_t**l)) for l in ls]).simplify()
         self.irreps_out = irreps_out
         self._ls_list = ls
         self._lmax = max(ls)
@@ -113,7 +122,12 @@ class SphericalHarmonics(torch.nn.Module):
 
 
 def spherical_harmonics(
-    l: Union[int, List[int], str, Irreps], x: torch.Tensor, normalize: bool, normalization: str = "integral"
+    l: Union[int, List[int], str, Irreps],
+    x: torch.Tensor,
+    normalize: bool,
+    normalization: str = "integral",
+    parity: bool = True,
+    time_reversal: bool = False,
 ):
     r"""Spherical harmonics
 
@@ -166,6 +180,12 @@ def spherical_harmonics(
         * *norm*: :math:`\|Y^l(x)\| = 1, x \in S^2`, ``component / sqrt(2l+1)``
         * *integral*: :math:`\int_{S^2} Y^l_m(x)^2 dx = 1`, ``component / sqrt(4pi)``
 
+    parity : bool
+        whether the input vector is odd under spatial inversion
+
+    time_reversal : bool
+        whether the input vector is odd under time reversal
+
     Returns
     -------
     `torch.Tensor`
@@ -186,7 +206,7 @@ def spherical_harmonics(
     wigner_3j
 
     """
-    sh = SphericalHarmonics(l, normalize, normalization)
+    sh = SphericalHarmonics(l, normalize, normalization, parity=parity, time_reversal=time_reversal)
     return sh(x)
 
 
