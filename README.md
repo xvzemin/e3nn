@@ -1,3 +1,12 @@
+# T-e3nn
+
+**T-e3nn** is a time-reversal extension of [e3nn](https://github.com/e3nn/e3nn), 
+developed by **Hongyu Yu et al.**
+
+Project repository: [https://github.com/Hongyu-yu/T-e3nn](https://github.com/Hongyu-yu/T-e3nn)
+
+Since the original T-e3nn was developed based on an older version of e3nn, we have migrated and adapted its implementation to the latest version of e3nn for compatibility with the latest APIs and features.
+
 # Euclidean neural networks
 [![Coverage Status](https://coveralls.io/repos/github/e3nn/e3nn/badge.svg?branch=main)](https://coveralls.io/github/e3nn/e3nn?branch=main)
 [![DOI](https://zenodo.org/badge/237431920.svg)](https://zenodo.org/badge/latestdoi/237431920)
